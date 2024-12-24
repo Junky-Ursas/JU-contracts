@@ -10,7 +10,8 @@ import "./entropy/IEntropy.sol";
 
 
 /// @title BaseGameContract
-/// @dev Abstract contract that implements core functionality for games using entropy and treasury management.
+/// @notice Abstract contract implementing core functionality for games using entropy and treasury management
+/// @dev Provides base functionality for game contracts including entropy handling and treasury interactions
 abstract contract BaseGameContractProxy is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IEntropyConsumer {
 
     /// @dev Constructor to initialize the HoneyFlip contract.
@@ -50,21 +51,30 @@ abstract contract BaseGameContractProxy is Initializable, OwnableUpgradeable, Re
         address indexed token
     );
 
+    /// @notice Game configuration parameters
+    /// @param player Address of the player
+    /// @param token Address of the token used for wager (0x0 for ETH)
+    /// @param wager Amount wagered by the player
+    /// @param userRandomNumber User-provided random number for additional entropy
+    /// @param extra Additional game-specific parameter (e.g. winning probability)
+    /// @param count Number of game iterations
     struct GameConfig {
-        address player;             // Address of the player
-        address token;              // Address of the token used for the wager
-        uint256 wager;              // Amount wagered by the player
-        bytes32 userRandomNumber;   // User-provided random number for additional entropy
-        uint8 extra;                // Winning probability (1% to 69%)
-        uint8 count;                // Number of game iterations
+        address player;             
+        address token;              
+        uint256 wager;              
+        bytes32 userRandomNumber;   
+        uint8 extra;                
+        uint8 count;                
     }
 
+    /// @notice Symbols used in games
     struct Symbols {
         uint8 symbol1;
         uint8 symbol2;
         uint8 symbol3;
     }
     
+    /// @notice Game state flags and tracking
     struct Flags {
         uint256 totalPayout;
         uint8 wonCount;
@@ -80,30 +90,6 @@ abstract contract BaseGameContractProxy is Initializable, OwnableUpgradeable, Re
     uint256 public minAmount;           // Minimum bet amount
 
     mapping(uint64 sequenceNumber => bytes) public games;   // Mapping from sequence number to Game struct
-
-    // /// @dev Handles deposits of wagers in either Ether or ERC20 tokens.
-    // /// @param token The address of the token being used for the wager
-    // /// @param msgValue The amount of Ether sent with the transaction (if applicable)
-    // /// @param fee The fee amount to be deducted from the deposit
-    // /// @param totalWager The total wager amount
-    // function handleDeposit(address token, uint256 msgValue, uint256 fee, uint256 totalWager) 
-    //     internal 
-    // {
-    //     // Handle deposits of wagers in either Ether or ERC20 tokens
-    //     if (token == address(0)) {
-    //         // If the token is Ether
-    //         require(msgValue > fee, "Bet amount too low");
-    //         uint256 netAmount = msgValue - fee;
-    //         require(netAmount >= totalWager, "Bet amount too low");
-    //         treasury.deposit{value: netAmount}(netAmount);
-    //     } else {
-    //         // If the token is an ERC20 token
-    //         IERC20 tokenContract = IERC20(token);
-    //         uint256 allowance = tokenContract.allowance(msg.sender, address(treasury));
-    //         require(allowance >= totalWager, "Allowance too low");
-    //         treasury.transferFrom(token, msg.sender, address(treasury), totalWager);
-    //     }
-    // }
 
     /// @dev Sets the house edge percentage.
     /// @param newEdge The new house edge percentage

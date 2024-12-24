@@ -6,16 +6,21 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
-/// @title TreasuryContractProxy
-/// @dev Manages deposits, payouts, and liquidity for whitelisted entities.
+/// @title TreasuryContract
+/// @notice Manages deposits, payouts and liquidity for the gaming platform
+/// @dev Handles token deposits/withdrawals and maintains whitelisted entities
 contract TreasuryContractProxy is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
+    /// @notice Mapping of whitelisted game contracts
     mapping(address => bool) public whitelistedEntities;
+    /// @notice Mapping of blacklisted player addresses
     mapping(address => bool) public blacklistedAddresses;
+    /// @notice Token balances for each token type
     mapping(address => uint256) public tokenBalances;
+    /// @notice Mapping of whitelisted tokens accepted by treasury
     mapping(address => bool) public whitelistedTokens;
     uint256 public houseEdge;
     bool public withdrawalsFrozen;

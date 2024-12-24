@@ -3,36 +3,38 @@ pragma solidity ^0.8.20;
 
 import "./BaseGameContract.sol";
 
+/// @title JunkySlotsV2
+/// @notice Advanced slot machine game with special symbols and multipliers
+/// @dev Implements a slot machine with wild, bonus and dead symbols
 contract BetterJunkySlotsProxy is BaseGameContractProxy {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    /// @dev Symbols on the reels
+    /// @notice Symbols available on the slot machine reels
+    /// @dev Each symbol has different payout multipliers and special effects
     enum SymbolType {
-        Symbol0, 
+        Symbol0,  // Highest paying symbol
         Symbol1,
         Symbol2,
         Symbol3,
         Symbol4,
         Symbol5,
         Symbol6,
-        Symbol7
+        Symbol7   // Lowest paying symbol
     }
 
-    /// @dev Speical parameters (probabilities, multipliers, etc.)
-    ///      Can be considered as "contract settings".
+    /// @notice Configuration for special symbols and game mechanics
+    /// @dev Controls probabilities and multipliers for special features
     struct SlotsSpecialConfig {
-        uint256 wildSymbolProbability;  
-        uint256 bonusSymbolProbability; 
-        uint256 deadSymbolProbability;
-
-        uint256 wildMultiplier;         // For example 2 = x2
-        uint256 deadMultiplier;         // For example 0 = all is lost
-        uint8   specialSymbolsPerSpinLimit; 
-
-        uint8   houseEdge;             // Commission (in %)
+        uint256 wildSymbolProbability;   // Chance of wild symbol appearing
+        uint256 bonusSymbolProbability;  // Chance of bonus symbol appearing
+        uint256 deadSymbolProbability;   // Chance of dead symbol appearing
+        uint256 wildMultiplier;         // Multiplier when wild symbol hits
+        uint256 deadMultiplier;         // Multiplier when dead symbol hits
+        uint8   specialSymbolsPerSpinLimit;  // Max special symbols per spin
+        uint8   houseEdge;              // House edge percentage
     }
 
     uint8[16][3] public reels;

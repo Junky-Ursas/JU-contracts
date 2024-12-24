@@ -4,24 +4,30 @@ pragma solidity ^0.8.20;
 import "./BaseGameContract.sol";
 import "./VaultToken.sol";
 
-/// @title VaultManager - Manages Vaults and their liquidity
+/// @title VaultManager
+/// @notice Manages liquidity vaults and vault tokens for the gaming platform
+/// @dev Handles creation and management of liquidity vaults and their associated tokens
 contract VaultManagerProxy is BaseGameContractProxy {
         /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
+    /// @notice Vault storage structure
+    /// @dev Stores core vault information
     struct Vault {
-        address vaultTokenAddress;
-        uint256 totalBalance;
-        uint256 totalVaultTokens;
+        address vaultTokenAddress;  // Address of vault's ERC20 token
+        uint256 totalBalance;      // Total liquidity in vault
+        uint256 totalVaultTokens;  // Total supply of vault tokens
     }
 
+    /// @notice Extended vault information including price
+    /// @dev Used for external queries and display
     struct VaultWithPrice {
         address vaultTokenAddress;
         address liqTokenAddress;
         uint256 totalBalance;
         uint256 totalVaultTokens;
-        uint256 vaultTokenPrice; 
+        uint256 vaultTokenPrice;   // Current price of vault tokens
     }
 
     struct UserDeposit {
