@@ -4,10 +4,9 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title VaultToken
-/// @notice ERC20 token representing shares in liquidity vaults
-/// @dev Implements mintable/burnable ERC20 token for vault share representation
-contract VaultToken is ERC20, Ownable {
+contract ERC20JU is ERC20, Ownable {
+    address internal liqTokenAddress;
+    address internal vaultManager;
     /// @dev Constructor to initialize the VaultToken
     /// @param name The name of the token
     /// @param symbol The symbol of the token
@@ -32,13 +31,6 @@ contract VaultToken is ERC20, Ownable {
         emit Burn(from, amount);
     }
 
-    /// @notice Emitted when new tokens are minted
-    /// @param to Address receiving the tokens
-    /// @param amount Amount of tokens minted
     event Mint(address indexed to, uint256 amount);
-
-    /// @notice Emitted when tokens are burned
-    /// @param from Address from which tokens are burned
-    /// @param amount Amount of tokens burned
     event Burn(address indexed from, uint256 amount);
 }

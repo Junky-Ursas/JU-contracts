@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./entropy/IEntropyConsumer.sol";
-import "./entropy/IEntropy.sol";
+import "@pythnetwork/entropy-sdk-solidity/IEntropy.sol";
+import "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -27,9 +27,8 @@ interface IOBRouter {
     ) external payable returns (uint256 amountOut);
 } 
 
-/// @title UrsarollV2
-/// @notice Lottery system with multiple rounds and entropy-based winner selection
-/// @dev Implements a multi-round lottery where players can participate in current and future rounds
+/// @title UrsaRollV2Proxy
+/// @dev Contract for a lottery system utilizing entropy for randomness.
 contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IEntropyConsumer {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -48,18 +47,16 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
     
     mapping(uint64 => uint256) public sequenceNumberToRoundIndex;
 
-    /// @notice Round information storage
-    /// @dev Stores all data related to a specific lottery round
     struct Round {
-        address winner;              // Winner of the round
-        uint256 protocolFeeOwed;    // Protocol fee for the round
-        RoundStatus status;         // Current status of the round
-        Deposit[] deposits;         // Array of all deposits in the round
-        uint256 roundTotalTickets; // Total tickets sold in the round
-        uint64 sequenceNumber;     // Entropy sequence number
-        uint256 currentRoundIndex; // Index of the round
-        uint256 prizePool;         // Total prize pool for the round
-        mapping(address => bool) hasDeposited; // Tracks if address has deposited
+        address winner;
+        uint256 protocolFeeOwed;
+        RoundStatus status;
+        Deposit[] deposits;
+        uint256 roundTotalTickets;
+        uint64 sequenceNumber;
+        uint256 currentRoundIndex;
+        uint256 prizePool;
+        mapping(address => bool) hasDeposited;
     }
 
     struct RoundDetails {
@@ -231,13 +228,13 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
 
         uint256 wagerToRefund = 0;
         
-        // Находим депозит игрока и обнуляем его данные
+        // Find deposit and zero out data
         for (uint256 i = 0; i < round.deposits.length; i++) {
             if (round.deposits[i].depositor == msg.sender) {
                 wagerToRefund = round.deposits[i].wager;
                 round.roundTotalTickets -= round.deposits[i].userTotalTickets;
                 
-                // Обнуляем данные вместо удаления
+                // Zero out data instead of deleting
                 round.deposits[i].wager = 0;
                 round.deposits[i].userTotalTickets = 0;
                 break;
