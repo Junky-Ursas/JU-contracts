@@ -48,6 +48,8 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
     uint256 public currentRoundIndex;
     /// @dev Maximum number of rounds to deposit at once
     uint256 public maxRoundsToDepositATM;
+    /// @dev Total BERA in play
+    uint256 public totalInPlay;
     /// @dev Protocol fee recipient
     address public protocolFeeRecipient;
     /// @dev Entropy provider
@@ -124,6 +126,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         victoryFee = 5000;
         maxRoundsToDepositATM = 68;
         maxPlayers = 100;
+        totalInPlay = 0;
         _startNewRound();
     }
 
@@ -281,6 +284,8 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             pendingWithdrawals[customRecipient] += wagerToRefund;
         }
 
+        totalInPlay -= wagerToRefund;
+
         emit WagerRefunded(roundIndex, msg.sender, wagerToRefund);
     }
 
@@ -328,7 +333,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
                 }
             }
         }
-
+        totalInPlay += wager;
         emit DepositETH(roundIndex, sender, wager);
     }
 
@@ -377,6 +382,8 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         if (!success) {
             pendingWithdrawals[round.winner] += prize - fee;
         }
+
+        totalInPlay -= prize;
         
         emit RoundSuccess(currentRoundIndex, round.winner, prize, round.sequenceNumber);
         
@@ -417,7 +424,24 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             }
         }
 
+        totalInPlay -= prize;
+
         emit RoundCancelled(roundIndex);
+    }
+
+    function withdrawExcess(address payable recipient) external onlyOwner {
+        uint256 contractBalance = address(this).balance;
+        uint256 excessBERA = contractBalance - totalInPlay;
+        require(excessBERA > 0, "No excess BERA to withdraw");
+        (bool success, ) = recipient.call{value: excessBERA}("");
+        require(success, "BERA transfer failed");
+    }
+
+    function withdrawERC20(address tokenAddress, address recipient) external onlyOwner {
+        IERC20 token = IERC20(tokenAddress);
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No tokens to withdraw");
+        token.safeTransfer(recipient, balance);
     }
 
     /// @dev Updates the value per ticket.

@@ -98,6 +98,9 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
     /// @dev Game configuration parameters
     GameConfig private gameConfig;
 
+    /// @dev Total BERA in play
+    uint256 public totalInPlay;
+
     /// @dev Timestamp when the game ended
     uint256 private gameEndTime;
 
@@ -202,6 +205,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         });
         playerAddresses.push(msg.sender);
 
+        totalInPlay += msg.value;
+
         emit PlayerJoined(
             msg.sender,
             currentGameId,
@@ -251,6 +256,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         require(amountOut > gameConfig.entryFee*95/100, "Not enough tokens swapped, considering up to 5% swap slippage");
 
         prizePool += amountOut;
+
+        totalInPlay += amountOut;
 
         players[msg.sender] = Player({
             state: PlayerState.Normal,
@@ -433,6 +440,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
 
         prizePool -= protocolFee;
 
+        totalInPlay -= protocolFee;
+
         uint256 prizePerWinner = prizePool / winners.length;
         uint256 remainder = prizePool - (prizePerWinner * winners.length);
 
@@ -444,11 +453,15 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
             }
         }
 
+        totalInPlay -= prizePool;
+
         // Send remainder to the first winner
         if (remainder > 0) {
             (bool success, ) = owner().call{value: remainder}("");
             require(success, "Remainder transfer failed");
         }
+
+        totalInPlay -= remainder;
 
         gameStats[currentGameId].completed = true;
         gameStats[currentGameId].endTime = block.timestamp;
@@ -490,6 +503,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
             }
         }
 
+        totalInPlay -= prizePool;
+
         // Update game state
         gameEnded = true;
         gameEndTime = block.timestamp;
@@ -518,6 +533,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
             pendingWithdrawals[msg.sender] += amount;
             revert("Claim failed: ETH transfer reverted");
         }
+
+        totalInPlay -= amount;
     }
 
     /// @dev Resets the game state
@@ -994,6 +1011,21 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         require(success, "Refund transfer failed");
         
         emit PlayerRefunded(currentGameId, msg.sender, gameConfig.entryFee);
+    }
+
+    function withdrawExcess(address payable recipient) external onlyOwner {
+        uint256 contractBalance = address(this).balance;
+        uint256 excessBERA = contractBalance - totalInPlay;
+        require(excessBERA > 0, "No excess BERA to withdraw");
+        (bool success, ) = recipient.call{value: excessBERA}("");
+        require(success, "BERA transfer failed");
+    }
+
+    function withdrawERC20(address tokenAddress, address recipient) external onlyOwner {
+        IERC20 token = IERC20(tokenAddress);
+        uint256 balance = token.balanceOf(address(this));
+        require(balance > 0, "No tokens to withdraw");
+        token.safeTransfer(recipient, balance);
     }
 
     event PlayerRefunded(
