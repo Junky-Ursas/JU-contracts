@@ -121,15 +121,13 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
         // Handle deposits of wagers in either Ether or ERC20 tokens
         if (config.token == address(0)) {
             // If the token is Ether
-            require(msgValue > fee, "Bet amount too low");
+            require(msgValue > fee, "Fee is higher");
             uint256 netAmount = msgValue - fee;
             require(netAmount >= totalWager, "Bet amount too low");
         } else {
             // If the token is an ERC20 token
             IERC20 tokenContract = IERC20(config.token);
-            uint256 allowance = tokenContract.allowance(msgSender, address(this));
-            require(allowance >= totalWager, "Allowance too low");
-            tokenContract.transferFrom(msgSender, address(this), totalWager);
+            tokenContract.safeTransferFrom(msgSender, address(this), totalWager);
         }
 
         uint64 sequenceNumber = entropy.requestWithCallback{value: fee}(entropyProvider, config.userRandomNumber);
@@ -155,7 +153,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
         } else {
             // If the token is an ERC20 token
             IERC20 tokenContract = IERC20(config.token);
-            tokenContract.approve(address(bankroll), totalWager);
+            tokenContract.safeIncreaseAllowance(address(bankroll), totalWager);
             bankroll.depositERC20(config.token, address(this), totalWager);
         }
         // Request a payout from the treasury contract if there is a non-zero refund amount
@@ -240,7 +238,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
             payable(config.player).transfer(config.wager * config.count);
         } else {
             IERC20 tokenContract = IERC20(config.token);
-            tokenContract.transfer(config.player, config.wager * config.count);
+            tokenContract.safeTransfer(config.player, config.wager * config.count);
         }
         emit GameCanceledAndRefunded(config, sequenceNumber);
     }
@@ -249,7 +247,8 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
         if (token == address(0)) {
             payable(owner()).transfer(amount);
         } else {
-            IERC20(token).transfer(owner(), amount);
+            IERC20 tokenContract = IERC20(token);
+            tokenContract.safeTransfer(owner(), amount);
         }
         emit EmergencyWithdraw(token, amount);
     }

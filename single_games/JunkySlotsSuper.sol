@@ -33,12 +33,23 @@ contract JunkySlotsSuper is JunkyUrsasGamesLib {
         bytes32 randomNumber,
         Flags memory flags
     ) internal view override returns (Flags memory) {
-        for (uint8 i = 0; i < config.count && i < maxIterations; i++) {
-            (uint256 baseWin, bytes32 rndNext) = getSpinWin(config.wager, randomNumber);
-            randomNumber = rndNext;
+        bytes32 currentRandom = randomNumber; // Current random number
+        uint256 bitsUsed = 0; // Number of bits used
 
-            uint256 spinPayout = applySpecialSymbols(baseWin, i, junkySlotsSuperSpecialConfig, randomNumber, config);
-            randomNumber = randomNumber >> 16;
+        for (uint8 i = 0; flags.playedCount < config.count && flags.playedCount < maxIterations; i++) {
+            // If bits are used up, generate a new random number using hashing
+            if (bitsUsed + 54 > 256) {
+                currentRandom = keccak256(abi.encodePacked(currentRandom, block.timestamp));
+                bitsUsed = 0;
+            }
+
+            // Get the payout for the current spin
+            (uint256 baseWin, bytes32 rndNext) = getSpinWin(config.wager, currentRandom >> bitsUsed);
+            bitsUsed += 24; // Used 24 bits for getSpinWin
+
+            // Apply special symbols
+            uint256 spinPayout = applySpecialSymbols(baseWin, i, junkySlotsSuperSpecialConfig, rndNext >> bitsUsed, config);
+            bitsUsed += 30; // Used 30 bits for applySpecialSymbols
 
             flags.totalPayout += spinPayout;
             if (spinPayout > 0) {
@@ -63,9 +74,10 @@ contract JunkySlotsSuper is JunkyUrsasGamesLib {
         bytes32 rnd,
         GameConfig memory config
     ) internal pure returns (uint256) {
-        require(spinIndex < 70, "Invalid spin index");
+        require(spinIndex < maxIterations, "Invalid spin index");
         // Similar to modifiers: dead increases over time, wild/bonus decreases. 
         uint256 deadModifier = 1000 + spinIndex * 2;    // 100% + 0.2% per spin
+
         uint256 goodSymbolModifier = 1000 - spinIndex * 2; // 100% - 0.2% per spin
 
         uint256 spinPayout = baseWin;

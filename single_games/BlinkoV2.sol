@@ -26,6 +26,7 @@ contract BlinkoV2 is JunkyUrsasGamesLib {
     {
         playGame(config);
     }
+
     /// @notice Calculates the game logic for Blinko.
     /// @param config The game configuration.
     /// @param randomNumber The random number.
@@ -37,14 +38,22 @@ contract BlinkoV2 is JunkyUrsasGamesLib {
         Flags memory flags
     ) internal view override returns (Flags memory) {
         uint256[13] memory currentTable = blinkoMultipliers[config.extra];
+        bytes32 currentRandom = randomNumber; 
+        uint256 bitsUsed = 0; 
 
         for (uint8 i = 0; i < config.count && flags.playedCount < maxIterations; i++) {
             uint256 path = 0;
-            bytes32 localRand = randomNumber;
 
+            // Generate new random number when we've used all bits
+            if (bitsUsed + levelsCount > 256) {
+                currentRandom = keccak256(abi.encodePacked(currentRandom, block.timestamp));
+                bitsUsed = 0;
+            }
+
+            // Extract bits for the current game
             for (uint8 level = 0; level < levelsCount; level++) {
-                path += (uint256(localRand) & 1);
-                localRand >>= 1;
+                path += (uint256(currentRandom >> bitsUsed) & 1);
+                bitsUsed++;
             }
 
             path = path % holesCount;
@@ -56,8 +65,6 @@ contract BlinkoV2 is JunkyUrsasGamesLib {
                 flags.wonCount++;
             }
             flags.playedCount++;
-
-            randomNumber >>= levelsCount;
         }
 
         return flags;
