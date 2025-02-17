@@ -64,6 +64,7 @@ contract Bankroll is JunkyUrsasEventsLib {
     /// @dev Allows a whitelisted entity to deposit ETH.
     /// @param amount Amount of ETH to deposit.
     function depositETH(address from, uint256 amount) external payable nonReentrant WhitelistedEntity(msg.sender) NotBlacklistedEntity(msg.sender) {
+        require(msg.value >= 0, "ETH amount must be greater than 0");
         require(msg.value >= amount, "Invalid ETH amount");
         tokenBalances[address(0)] += msg.value;
         emit DepositETH(from, amount);

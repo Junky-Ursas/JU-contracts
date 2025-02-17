@@ -5,8 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract ERC20JU is ERC20, Ownable {
-    address internal liqTokenAddress;
-    address internal vaultManager;
     /// @dev Constructor to initialize the VaultToken
     /// @param name The name of the token
     /// @param symbol The symbol of the token

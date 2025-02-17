@@ -9,7 +9,7 @@ import "hardhat/console.sol";
 
 /// @title VaultManager - Manages Vaults and their liquidity
 contract VaultManagerV2 is JunkyUrsasEventsLib {
-
+    uint256 private constant PRECISION = 1e18; // Use 1e18 for higher precision
     Bankroll internal bankroll;       // Bankroll contract for handling deposits and payouts
 
     /// @dev Struct for user information related to a specific liquidity token
@@ -27,8 +27,8 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
     mapping(address liqTokenAddress => mapping(address userAddress => UserInfo)) internal userInfo; 
     /// @dev Mapping for vault addresses
     mapping(address vaultTokenAddress => bool) internal isVaultTokenExists;
-    /// @dev Array for vault token addresses
-    address[] internal vaultTokenAddresses; 
+    /// @dev Array for liquidity token addresses
+    address[] internal liqTokenAddresses; 
 
     /// @dev Function to initialize the contract
     /// @param bankrollAddress The address of the bankroll contract
@@ -52,7 +52,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         Vault storage newVault = vaults[liqTokenAddress];
         isVaultTokenExists[address(vaultToken)] = true;
         newVault.vaultTokenAddress = address(vaultToken);
-        vaultTokenAddresses.push(address(vaultToken)); 
+        liqTokenAddresses.push(liqTokenAddress); 
         emit VaultCreated(liqTokenAddress, address(vaultToken));
         bankroll.notifyVaultCreated(liqTokenAddress, address(vaultToken));
         return address(vaultToken);
@@ -61,16 +61,23 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
     /// @dev Function to add liquidity to a vault
     function addLiquidity(
         address liqTokenAddress,
-        uint256 amount
+        uint256 amount,
+        uint256 minVaultTokens // New parameter for slippage protection
     ) external payable nonReentrant {
         Vault storage vault = vaults[liqTokenAddress];
         require(vault.vaultTokenAddress != address(0), "Vault does not exist");
         UserInfo storage user = userInfo[liqTokenAddress][msg.sender];
         validateAddLiquidityInputs(liqTokenAddress, amount);
+
         uint256 vaultTokens = calculateVaultTokens(liqTokenAddress, amount, vault.totalVaultTokens);
+
+        // Slippage protection: Ensure the user receives at least `minVaultTokens`
+        require(vaultTokens >= minVaultTokens, "Slippage too high: Received fewer tokens than expected");
+
         handleDeposit(msg.value, amount, msg.sender, liqTokenAddress);
         mintVaultTokens(liqTokenAddress, user, vaultTokens);
         updateVaultAndUserData(liqTokenAddress, user, amount, vaultTokens);
+
         emit LiquidityAdded(msg.sender, liqTokenAddress, amount, vaultTokens);
         bankroll.notifyLiquidityAdded(msg.sender, liqTokenAddress, amount, vaultTokens);
     }
@@ -78,7 +85,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
     /// @dev Validates inputs for adding liquidity
     function validateAddLiquidityInputs(address liqTokenAddress, uint256 amount) internal view {
         if (liqTokenAddress == address(0)) {
-            require(msg.value == amount, "Incorrect ETH amount sent");
+            require(msg.value >= amount, "Incorrect ETH amount sent");
         }
     }
 
@@ -91,7 +98,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         if (totalVaultTokens == 0) {
             return amount;
         } else {
-            return (amount * 100000) / getVaultTokenPrice(liqTokenAddress);
+            return (amount * PRECISION) / getVaultTokenPrice(liqTokenAddress);
         }
     }
 
@@ -130,10 +137,10 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         } else {
             // Subsequent deposits
             uint256 newAmount = amount;
-            uint256 prevAmount = (userDeposit.vaultTokens * userDeposit.avgExchangeRate) / 100000;
+            uint256 prevAmount = (userDeposit.vaultTokens * userDeposit.avgExchangeRate) / PRECISION;
             uint256 totalAmount = prevAmount + newAmount;
-            uint256 totalTokens = userDeposit.vaultTokens + vaultTokens;
-            userDeposit.avgExchangeRate = (totalAmount * 100000) / totalTokens;
+            uint256 totalTokens = userDeposit.vaultTokens;
+            userDeposit.avgExchangeRate = (totalAmount * PRECISION) / totalTokens;
         }
     }
 
@@ -153,7 +160,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
 
         uint256 amountWithdrawnFromInitial = calculateWithdrawalAmount(liqTokenAddress, user.deposit, vaultTokens);
         uint256 currentPrice = getVaultTokenPrice(liqTokenAddress);
-        uint256 amountToWithdraw = (vaultTokens * currentPrice) / 100000;
+        uint256 amountToWithdraw = (vaultTokens * currentPrice) / PRECISION;
 
         updateVaultAndUserDataOnWithdrawal(liqTokenAddress, user, vaultTokens, amountWithdrawnFromInitial);
 
@@ -182,9 +189,9 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         uint256 vaultTokens
     ) internal view returns (uint256) {
         Vault storage vault = vaults[liqTokenAddress];
-        uint256 initialAmount = (userDeposit.avgExchangeRate * userDeposit.vaultTokens) / 100000;
-        uint256 withdrawShare = (vaultTokens * 100000) / userDeposit.vaultTokens;
-        uint256 amountWithdrawn = (initialAmount * withdrawShare) / 100000;
+        uint256 initialAmount = (userDeposit.avgExchangeRate * userDeposit.vaultTokens) / PRECISION;
+        uint256 withdrawShare = (vaultTokens * PRECISION) / userDeposit.vaultTokens;
+        uint256 amountWithdrawn = (initialAmount * withdrawShare) / PRECISION;
         require(amountWithdrawn <= vault.totalBalance, "Not enough liquidity");
         return amountWithdrawn;
     }
@@ -256,7 +263,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         stakingInfo.stakedAmount += vaultTokens;
         stakingInfo.stakingContract = to;
 
-        uint256 stakedAmount = (vaultTokens * user.deposit.avgExchangeRate) / 100000;
+        uint256 stakedAmount = (vaultTokens * user.deposit.avgExchangeRate) / PRECISION;
         emit VaultTokenStaked(from, to, liqTokenAddress, vaultTokens, stakedAmount);
     }
 
@@ -289,7 +296,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
 
         updateRecipientExchangeRate(toUser.deposit, vaultTokens, currentPrice);
 
-        emit VaultTokenTransferred(from, to, liqTokenAddress, vaultTokens, (vaultTokens * currentPrice) / 100000);
+        emit VaultTokenTransferred(from, to, liqTokenAddress, vaultTokens, (vaultTokens * currentPrice) / PRECISION);
     }
 
     /// @dev Updates the average exchange rate for the recipient
@@ -303,9 +310,9 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
             toDeposit.avgExchangeRate = currentPrice;
         } else {
             // Update the average exchange rate for existing tokens
-            uint256 existingValue = ((toDeposit.vaultTokens - vaultTokens) * toDeposit.avgExchangeRate) / 100000;
-            uint256 newValue = (vaultTokens * currentPrice) / 100000;
-            toDeposit.avgExchangeRate = ((existingValue + newValue) * 100000) / toDeposit.vaultTokens;
+            uint256 existingValue = ((toDeposit.vaultTokens - vaultTokens) * toDeposit.avgExchangeRate) / PRECISION;
+            uint256 newValue = (vaultTokens * currentPrice) / PRECISION;
+            toDeposit.avgExchangeRate = ((existingValue + newValue) * PRECISION) / toDeposit.vaultTokens;
         }
     }
 
@@ -320,22 +327,22 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         uint256 totalVaultTokens = vault.totalVaultTokens;
     
         if (totalVaultTokens == 0) {
-            return 100000; // Initial price
+            return PRECISION; // Initial price
         }
     
         if (bankrollBalance == 0) {
             return 0; // Avoid division by zero
         }
-    
-        return (bankrollBalance * 100000) / totalVaultTokens;
+        require(bankrollBalance > 0, "Bankroll balance is zero");
+        return (bankrollBalance * PRECISION) / totalVaultTokens;
     }
 
     /// @dev Function to get all vaults
     /// @return An array of all vaults with updated prices
     function getAllVaults() external view returns (VaultWithPrice[] memory) {
-        VaultWithPrice[] memory allVaults = new VaultWithPrice[](vaultTokenAddresses.length);
-        for (uint256 i = 0; i < vaultTokenAddresses.length; i++) {
-            address liqTokenAddress = vaultTokenAddresses[i];
+        VaultWithPrice[] memory allVaults = new VaultWithPrice[](liqTokenAddresses.length);
+        for (uint256 i = 0; i < liqTokenAddresses.length; i++) {
+            address liqTokenAddress = liqTokenAddresses[i];
             Vault storage vault = vaults[liqTokenAddress];
             uint256 currentPrice = getVaultTokenPrice(liqTokenAddress);
             allVaults[i] = VaultWithPrice({
