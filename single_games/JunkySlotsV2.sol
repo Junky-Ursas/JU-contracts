@@ -19,7 +19,7 @@ contract JunkySlotsV2 is JunkyUrsasGamesLib {
     function playJunkySlotsV2(GameConfig memory config)
         external
         payable
-        maxWagerNotExceeded(config, junkySlotsV2Multipliers[0]) // Ensures wager is within the maximum limit
+        maxWagerNotExceeded(config, junkySlotsV2SpecialMultipliers[0] / 2) // Ensures wager is within the maximum limit
         nonReentrant // Prevents reentrancy attacks
         whenNotPaused // Ensures the contract is not paused
     {

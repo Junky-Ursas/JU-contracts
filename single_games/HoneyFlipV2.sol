@@ -36,6 +36,8 @@ contract HoneyFlipV2 is JunkyUrsasGamesLib {
         bytes32 randomNumber,
         Flags memory flags
     ) internal view override returns (Flags memory) {
+        require(config.extra < maxProbability, "Invalid probability");
+        require(config.extra > minProbability, "Invalid probability");
         for (uint8 i = 0; i < config.count && flags.playedCount < maxIterations; i++) {
             bool won = (uint256(randomNumber) % 100) < config.extra;
 

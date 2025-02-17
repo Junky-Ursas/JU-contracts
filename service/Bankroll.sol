@@ -2,14 +2,18 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "../libs/JunkyUrsasEventsLib.sol";
 
 /// @title Bankroll
 /// @dev Manages deposits, payouts, and liquidity for whitelisted entities.
 contract Bankroll is JunkyUrsasEventsLib {
+    using SafeERC20 for IERC20;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
+
     }
 
     mapping(address => bool) internal whitelistedEntities;
@@ -60,6 +64,7 @@ contract Bankroll is JunkyUrsasEventsLib {
     /// @dev Allows a whitelisted entity to deposit ETH.
     /// @param amount Amount of ETH to deposit.
     function depositETH(address from, uint256 amount) external payable nonReentrant WhitelistedEntity(msg.sender) NotBlacklistedEntity(msg.sender) {
+        require(msg.value >= 0, "ETH amount must be greater than 0");
         require(msg.value >= amount, "Invalid ETH amount");
         tokenBalances[address(0)] += msg.value;
         emit DepositETH(from, amount);
@@ -76,10 +81,12 @@ contract Bankroll is JunkyUrsasEventsLib {
         NotBlacklistedEntity(from)
         NotBlacklistedEntity(msg.sender) 
     {
-        require(IERC20(token).transferFrom(from, address(this), amount), "Transfer failed");
+        IERC20 tokenContract = IERC20(token);
+        tokenContract.safeTransferFrom(from, address(this), amount);
         tokenBalances[token] += amount;
         emit DepositERC20(from, amount, token);
     }
+
 
     /// @dev Allows the owner to set the fee recipient address.
     /// @param newProtocolFeeRecipient Address of the fee recipient.
@@ -117,9 +124,11 @@ contract Bankroll is JunkyUrsasEventsLib {
             payable(protocolFeeRecipient).transfer(fee);
             payable(user).transfer(payoutAmount);
         } else {
-            require(IERC20(token).transfer(protocolFeeRecipient, fee), "Fee transfer failed");
-            require(IERC20(token).transfer(user, payoutAmount), "Payout transfer failed");
+            IERC20 tokenContract = IERC20(token);
+            tokenContract.safeTransfer(protocolFeeRecipient, fee);
+            tokenContract.safeTransfer(user, payoutAmount);
         }
+
 
         emit Payout(user, payoutAmount, token);
     }
