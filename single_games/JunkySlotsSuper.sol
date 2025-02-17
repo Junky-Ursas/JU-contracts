@@ -49,6 +49,7 @@ contract JunkySlotsSuper is JunkyUrsasGamesLib {
 
             // Apply special symbols
             uint256 spinPayout = applySpecialSymbols(baseWin, i, junkySlotsSuperSpecialConfig, rndNext >> bitsUsed, config);
+
             bitsUsed += 30; // Used 30 bits for applySpecialSymbols
 
             flags.totalPayout += spinPayout;
