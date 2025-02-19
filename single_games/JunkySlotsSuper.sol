@@ -74,7 +74,7 @@ contract JunkySlotsSuper is JunkyUrsasGamesLib {
         SlotsSpecialConfig memory cfg,
         bytes32 rnd,
         GameConfig memory config
-    ) internal pure returns (uint256) {
+    ) internal view returns (uint256) {
         require(spinIndex < maxIterations, "Invalid spin index");
         // Similar to modifiers: dead increases over time, wild/bonus decreases. 
         uint256 deadModifier = 1000 + spinIndex * 2;    // 100% + 0.2% per spin

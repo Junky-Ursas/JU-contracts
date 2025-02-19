@@ -31,7 +31,7 @@ interface IOBRouter {
 
 /// @title UrsaRollV2Proxy
 /// @dev Contract for a lottery system utilizing entropy for randomness.
-contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IEntropyConsumer {
+contract UrsaRoll is Initializable, OwnableUpgradeable, ReentrancyGuardUpgradeable, IEntropyConsumer {
     using SafeERC20 for IERC20;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -72,7 +72,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         Deposit[] deposits;
         uint256 roundTotalTickets;
         uint64 sequenceNumber;
-        uint256 currentRoundIndex;
+        uint256 index;
         uint256 prizePool;
         mapping(address => bool) hasDeposited;
     }
@@ -121,9 +121,9 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         entropy = IEntropy(entropyAddress);
         entropyProvider = entropyProviderAddress;
         router = IOBRouter(routerAddress); 
-        currentRoundIndex = 6100;
+        currentRoundIndex = 0;
         ticketPrice = 0.01 ether;
-        victoryFee = 5000;
+        victoryFee = 2000;
         maxRoundsToDepositATM = 68;
         maxPlayers = 100;
         totalInPlay = 0;
@@ -134,14 +134,14 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
     function _startNewRound() internal {
         currentRoundIndex++;
         rounds[currentRoundIndex].status = RoundStatus.Current;
-        rounds[currentRoundIndex].currentRoundIndex = currentRoundIndex;
+        rounds[currentRoundIndex].index = currentRoundIndex;
         emit RoundStarted(currentRoundIndex);
 
         for (uint256 i = 1; i <= maxRoundsToDepositATM; i++) {
             uint256 futureRoundIndex = currentRoundIndex + i;
             if (rounds[futureRoundIndex].status == RoundStatus.None) {
                 rounds[futureRoundIndex].status = RoundStatus.Open;
-                rounds[futureRoundIndex].currentRoundIndex = futureRoundIndex;
+                rounds[futureRoundIndex].index = futureRoundIndex;
                 emit RoundOpenedForDeposits(futureRoundIndex);
             }
         }
@@ -155,6 +155,8 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         require(msg.value > 0, "Bet amount is below the minimum required");
         uint256 amountPerDeposit = msg.value / count;
         require(amountPerDeposit >= ticketPrice, "Bet amount is below the minimum required");
+
+        uint256 totalUsed = 0;
     
         for (uint256 i = 0; i < count; i++) {
             uint256 roundIndex = currentRoundIndex + i;
@@ -162,18 +164,22 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             
             if (round.status == RoundStatus.None) {
                 round.status = (roundIndex == currentRoundIndex) ? RoundStatus.Current : RoundStatus.Open;
-                round.currentRoundIndex = roundIndex;
+
+                round.index = roundIndex;
                 emit RoundOpenedForDeposits(roundIndex);
             }
+            uint256 ticketsBought = amountPerDeposit / ticketPrice;
+            uint256 amountUsed = ticketsBought * ticketPrice;
+            totalUsed += amountUsed;
+
             _deposit(msg.sender, amountPerDeposit, roundIndex);
         }
     
-        uint256 totalDeposited = amountPerDeposit * count;
-        uint256 leftover = msg.value - totalDeposited;
+        uint256 leftover = msg.value - totalUsed;
         if (leftover > 0) {
-            (bool success, ) = protocolFeeRecipient.call{value: leftover}("");
+            (bool success, ) = msg.sender.call{value: leftover}("");
             if (!success) {
-                pendingWithdrawals[protocolFeeRecipient] += leftover;
+                pendingWithdrawals[msg.sender] += leftover;
             }
         }
     }
@@ -200,12 +206,10 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         
         // Transfer inputToken from msg.sender to this contract
         IERC20 token = IERC20(tokenInfo.inputToken);
-        bool transferSuccess = token.safeTransferFrom(msg.sender, address(this), tokenInfo.inputAmount);
-        require(transferSuccess, "Transfer of input token failed");
+        token.safeTransferFrom(msg.sender, address(this), tokenInfo.inputAmount);
 
         // Approve the router to spend the tokens
-        bool approveSuccess = token.safeIncreaseAllowance(address(router), tokenInfo.inputAmount);
-        require(approveSuccess, "Approve failed");
+        token.safeIncreaseAllowance(address(router), tokenInfo.inputAmount);
 
         uint256 amountOut;
         try router.swap{value: msg.value}(
@@ -223,26 +227,32 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         uint256 amountPerDeposit = amountOut / count;
         require(amountPerDeposit >= ticketPrice, "Swapped amount per deposit is below ticket price");
 
+        uint256 totalUsed = 0;
         for (uint256 i = 0; i < count; i++) {
             uint256 roundIndex = currentRoundIndex + i;
             Round storage round = rounds[roundIndex];
             
             if (round.status == RoundStatus.None) {
                 round.status = (roundIndex == currentRoundIndex) ? RoundStatus.Current : RoundStatus.Open;
-                round.currentRoundIndex = roundIndex;
+                round.index = roundIndex;
                 emit RoundOpenedForDeposits(roundIndex);
             }
+
+            uint256 ticketsBought = amountPerDeposit / ticketPrice;
+            uint256 amountUsed = ticketsBought * ticketPrice;
+            totalUsed += amountUsed;    
+
             _deposit(msg.sender, amountPerDeposit, roundIndex);
         }
 
-        uint256 totalDeposited = amountPerDeposit * count;
-        uint256 leftover = amountOut - totalDeposited;
+        uint256 leftover = amountOut - totalUsed;
         if (leftover > 0) {
-            (bool success, ) = protocolFeeRecipient.call{value: leftover}("");
+            (bool success, ) = msg.sender.call{value: leftover}("");
             if (!success) {
-                pendingWithdrawals[protocolFeeRecipient] += leftover;
+                pendingWithdrawals[msg.sender] += leftover;
             }
         }
+
     }
 
     /// @dev Refunds a wager for a player.
@@ -259,7 +269,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         // Find deposit and remember its index
         for (uint256 i = 0; i < round.deposits.length; i++) {
             if (round.deposits[i].depositor == msg.sender) {
-                wagerToRefund = round.deposits[i].wager;
+                wagerToRefund = round.deposits[i].userTotalTickets * ticketPrice;
                 round.roundTotalTickets -= round.deposits[i].userTotalTickets;
                 depositIndex = i; // Save deposit index
                 break;
@@ -312,6 +322,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         require(round.status == RoundStatus.Open || round.status == RoundStatus.Current, "Round is not open for deposits");
         require(round.deposits.length < maxPlayers, "Max players reached for this round");
         uint256 ticketsBought = wager / ticketPrice;
+        uint256 fullWager = 0;
         require(ticketsBought > 0, "Wager too small");
 
         if (!round.hasDeposited[sender]) {
@@ -323,19 +334,22 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
                 })
             );
             round.hasDeposited[sender] = true;
+            fullWager = ticketsBought;
         } else {
             for (uint256 i = 0; i < round.deposits.length; i++) {
                 if (round.deposits[i].depositor == sender) {
-                    round.deposits[i].wager += wager;
                     round.deposits[i].userTotalTickets += ticketsBought;
                     round.roundTotalTickets += ticketsBought;
+                    fullWager += round.deposits[i].userTotalTickets;
                     break;
                 }
             }
+
         }
         totalInPlay += wager;
-        emit DepositETH(roundIndex, sender, wager);
+        emit DepositETH(roundIndex, sender, fullWager);
     }
+
 
     /// @dev Requests entropy and initiates the process of selecting a winner.
     /// @param userRandomNumber A random number provided for the entropy request.
@@ -376,7 +390,10 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         uint256 prize = round.prizePool;
         uint256 fee = prize * victoryFee / 100000;
         
-        _distributeFees(fee);
+        (bool successFee, ) = protocolFeeRecipient.call{value: fee}("");
+        if (!successFee) {
+            pendingWithdrawals[protocolFeeRecipient] += fee;
+        }
         
         (bool success, ) = round.winner.call{value: prize - fee}("");
         if (!success) {
@@ -416,7 +433,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
 
         for (uint256 i = 0; i < round.deposits.length; i++) {
             address depositor = round.deposits[i].depositor;
-            uint256 wager = round.deposits[i].wager;
+            uint256 wager = round.deposits[i].userTotalTickets * ticketPrice;
             
             (bool success, ) = depositor.call{value: wager}("");
             if (!success) {
@@ -424,7 +441,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             }
         }
 
-        totalInPlay -= prize;
+        totalInPlay -= round.prizePool;
 
         emit RoundCancelled(roundIndex);
     }
@@ -468,15 +485,6 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         entropy = IEntropy(_entropy);
     }
 
-    /// @dev Distributes fees to the fee recipient.
-    /// @param amount Amount to distribute.
-    function _distributeFees(uint256 amount) internal {
-        (bool success, ) = protocolFeeRecipient.call{value: amount}("");
-        if (!success) {
-            pendingWithdrawals[protocolFeeRecipient] += amount;
-        }
-    }
-
     /// @dev Returns the address of the entropy contract.
     function getEntropy() internal view override returns (address) {
         return address(entropy);
@@ -493,7 +501,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             round.status,
             round.roundTotalTickets,
             round.sequenceNumber,
-            round.currentRoundIndex
+            round.index
         );
     }
 
@@ -507,11 +515,10 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
             round.status,
             round.roundTotalTickets,
             round.sequenceNumber,
-            round.currentRoundIndex
+            round.index
         );
     }
 
-    
     /// @dev Updates the current round index.
     /// @param newIndex New index for the current round.
     function updateCurrentRoundIndex(uint256 newIndex) external onlyOwner {
@@ -538,7 +545,7 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         }
     }
 
-        /// @dev Retrieves deposits by round.
+    /// @dev Retrieves deposits by round.
     /// @param roundIndex ID of the round.
     /// @return depositors Array of all depositors.
     /// @return userTotalTickets Array of all userTotalTickets.
@@ -569,20 +576,24 @@ contract UrsaRollV2Proxy is Initializable, OwnableUpgradeable, ReentrancyGuardUp
         return round.deposits[depositIndex];
     }
 
+    /// @dev Updates the protocol fee recipient.
+    /// @param newProtocolFeeRecipient New protocol fee recipient.
     function setProtocolFeeRecipient(address newProtocolFeeRecipient) external onlyOwner {
         protocolFeeRecipient = newProtocolFeeRecipient;
     }
 
+    /// @dev Updates the maximum number of rounds to deposit at once.
+    /// @param newMaxRoundsToDepositATM New maximum number of rounds to deposit at once.
     function setMaxRoundsToDepositATM(uint256 newMaxRoundsToDepositATM) external onlyOwner {
         maxRoundsToDepositATM = newMaxRoundsToDepositATM;
     }
 
+    /// @dev Updates the router contract address.
+    /// @param newRouter New router contract address.
     function setRouter(address newRouter) external onlyOwner {
         router = IOBRouter(newRouter);
     }
 
     /// @dev Fallback function to receive native tokens.
     receive() external payable {}
-
-    
 }

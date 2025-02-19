@@ -11,6 +11,7 @@ import "./JunkyUrsasEventsLib.sol";
 /// @title BaseGameContract
 /// @dev Сontract that implements core functionality for games using entropy and bankroll management.
 abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
+    using SafeERC20 for IERC20;
     Bankroll internal bankroll;       // Bankroll contract for handling deposits and payouts
     IEntropy internal entropy;                // Entropy contract for randomness
     address internal entropyProvider; // Address of the entropy provider

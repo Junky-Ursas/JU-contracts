@@ -60,6 +60,7 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
     struct Player {
         PlayerState state;
         bool isAlive;
+        uint256 wager;
     }
 
     /// @dev Represents a rount state info
@@ -201,9 +202,11 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
 
         players[msg.sender] = Player({
             state: PlayerState.Normal,
-            isAlive: true
+            isAlive: true,
+            wager: msg.value
         });
         playerAddresses.push(msg.sender);
+
 
         totalInPlay += msg.value;
 
@@ -234,11 +237,9 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         require(tokenInfo.outputReceiver == address(this), "Output receiver must be contract address");
 
         IERC20 token = IERC20(tokenInfo.inputToken);
-        bool transferSuccess = token.safeTransferFrom(msg.sender, address(this), tokenInfo.inputAmount);
-        require(transferSuccess, "Transfer of input token failed");
+        token.safeTransferFrom(msg.sender, address(this), tokenInfo.inputAmount);
 
-        bool approveSuccess = token.safeIncreaseAllowance(address(router), tokenInfo.inputAmount);
-        require(approveSuccess, "Approve failed");
+        token.safeIncreaseAllowance(address(router), tokenInfo.inputAmount);        
 
         uint256 amountOut;
         try router.swap{value: msg.value}(
@@ -261,9 +262,11 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
 
         players[msg.sender] = Player({
             state: PlayerState.Normal,
-            isAlive: true
+            isAlive: true,
+            wager: amountOut
         });
         playerAddresses.push(msg.sender);
+
 
         emit PlayerJoined(
             msg.sender,
@@ -435,7 +438,8 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         require(winners.length > 0, "No winners found");
 
         uint256 protocolFee = (prizePool * houseEdge) / 100;
-        (bool _success, ) = payable(owner()).call{value: protocolFee}("");
+        address protocolFeeRecipient = getProtocolFeeRecipient();
+        (bool _success, ) = payable(protocolFeeRecipient).call{value: protocolFee}("");
         require(_success, "Owner fee transfer failed");
 
         prizePool -= protocolFee;
@@ -492,15 +496,15 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
     function emergencyEndGame() external onlyOwner nonReentrant {
         for (uint i = 0; i < playerAddresses.length; i++) {
             address player = playerAddresses[i];
-            uint256 entryFee = gameConfig.entryFee;
 
             // Try to send ETH to the player
-            (bool success, ) = player.call{value: entryFee}("");
+            (bool success, ) = player.call{value: players[player].wager}("");
 
             // If sending fails, add the amount to pendingWithdrawals
             if (!success) {
-                pendingWithdrawals[player] += entryFee;
+                pendingWithdrawals[player] += players[player].wager;
             }
+
         }
 
         totalInPlay -= prizePool;
@@ -984,6 +988,10 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         currentGameId = _gameId;
     }
 
+    function getProtocolFeeRecipient() public pure returns (address) {
+        return address(0x426473bD155bae131dc1d92Cb5d368E34649fB50);
+    }
+
     /// @dev Refunds a player's entry fee
     function refundBrumble(address payable customRecipient) external nonReentrant {
         require(gameStarted == false, "Game has already started");
@@ -994,7 +1002,7 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
         players[msg.sender].isAlive = false;
         initialPlayerCount--;
         
-        prizePool -= gameConfig.entryFee;
+        prizePool -= players[msg.sender].wager;
 
         // Remove the player from the playerAddresses array
         for (uint i = 0; i < playerAddresses.length; i++) {
@@ -1007,10 +1015,10 @@ contract BrumbleGame is Initializable, ReentrancyGuardUpgradeable, IEntropyConsu
             }
         }
 
-        (bool success, ) = customRecipient.call{value: gameConfig.entryFee}("");
+        (bool success, ) = customRecipient.call{value: players[msg.sender].wager}("");
         require(success, "Refund transfer failed");
         
-        emit PlayerRefunded(currentGameId, msg.sender, gameConfig.entryFee);
+        emit PlayerRefunded(currentGameId, msg.sender, players[msg.sender].wager);
     }
 
     function withdrawExcess(address payable recipient) external onlyOwner {
