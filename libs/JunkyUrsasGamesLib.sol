@@ -191,7 +191,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
         // Decode the game configuration
         require(games[sequenceNumber].length > 0, "Game not found");
         GameConfig memory config = abi.decode(games[sequenceNumber], (GameConfig));
-        require(config.timestamp + 1000 < block.timestamp, "Resolve period over, refund money");
+        require(config.timestamp + 1000 > block.timestamp, "Resolve period over, refund money");
         
         Flags memory flags;
         flags.initialRandomNumber = randomNumber;
@@ -233,7 +233,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
     
     function refund(uint64 sequenceNumber) external nonReentrant {
         GameConfig memory config = abi.decode(games[sequenceNumber], (GameConfig));
-        require(config.timestamp + 1000 > block.timestamp, "Resolve period is not over yet");
+        require(config.timestamp + 1000 < block.timestamp, "Resolve period is not over yet");
         delete games[sequenceNumber];
         if (config.token == address(0)) {
             payable(config.player).transfer(config.wager * config.count);
