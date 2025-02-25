@@ -36,7 +36,7 @@ contract JunkySlotsSuper is JunkyUrsasGamesLib {
         bytes32 currentRandom = randomNumber; // Current random number
         uint256 bitsUsed = 0; // Number of bits used
 
-        for (uint8 i = 0; flags.playedCount < config.count && flags.playedCount < maxIterations; i++) {
+        for (uint8 i = 0; i < config.count && flags.playedCount < maxIterations; i++) {
             // If bits are used up, generate a new random number using hashing
             if (bitsUsed + 54 > 256) {
                 currentRandom = keccak256(abi.encodePacked(currentRandom, block.timestamp));

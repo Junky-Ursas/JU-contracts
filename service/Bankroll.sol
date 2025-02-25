@@ -239,6 +239,20 @@ contract Bankroll is JunkyUrsasEventsLib {
         emit TokenWhitelisted(token);
     }
 
+    /// @dev Is token whitelisted.
+    /// @param token Address of the token.
+    /// @return isWhitelisted Whether the token is whitelisted.
+    function isTokenWhitelisted(address token) external view returns (bool isWhitelisted) {
+        return whitelistedTokens[token];
+    }
+
+    /// @dev Is entity whitelisted.
+    /// @param entity Address of the entity.
+    /// @return isWhitelisted Whether the entity is whitelisted.
+    function isEntityWhitelisted(address entity) external view returns (bool isWhitelisted) {
+        return whitelistedEntities[entity];
+    }
+
     /// @dev Removes a token from the whitelist.
     /// @param token Address of the token.
     function removeTokenFromWhitelist(address token) external onlyOwner {

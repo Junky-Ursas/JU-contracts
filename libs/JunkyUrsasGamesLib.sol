@@ -103,14 +103,12 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
     /// @param msgSender The address of the message sender
     /// @return The sequence number of the game
     function handleDeposit(GameConfig memory config, uint256 msgValue, address msgSender) 
-        internal returns (uint64)
+       internal returns (uint64)
     {
         // Get the entropy fee
         uint256 fee = entropy.getFee(entropyProvider);
         // Get total wager 
         uint256 totalWager = config.wager * config.count;
-        // Check that the fee is sufficient
-        require(msgValue >= fee, "Insufficient fee");
         // Check that the bet amount is above the minimum required
         require(config.wager >= minBetAmount, "Bet amount is below the minimum required");
         // Check if the count is valid
@@ -118,12 +116,14 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
 
         require(config.player == msgSender, "Invalid player");
         require(config.player != address(0), "Invalid player");
+
+        require(bankroll.isTokenWhitelisted(config.token) == true, "Token is not whitelisted");
+        require(bankroll.isEntityWhitelisted(config.gameAddress) == true, "Game is not whitelisted");
+
         // Handle deposits of wagers in either Ether or ERC20 tokens
         if (config.token == address(0)) {
             // If the token is Ether
-            require(msgValue > fee, "Fee is higher");
-            uint256 netAmount = msgValue - fee;
-            require(netAmount >= totalWager, "Bet amount too low");
+            require(msgValue >= totalWager, "Bet amount too low");
         } else {
             // If the token is an ERC20 token
             IERC20 tokenContract = IERC20(config.token);
@@ -190,7 +190,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
         // Decode the game configuration
         require(games[sequenceNumber].length > 0, "Game not found");
         GameConfig memory config = abi.decode(games[sequenceNumber], (GameConfig));
-        require(config.timestamp + 1000 < block.timestamp, "Resolve period over, refund money");
+        require(config.timestamp + 1000 > block.timestamp, "Resolve period over, refund money");
         
         Flags memory flags;
         flags.initialRandomNumber = randomNumber;
@@ -232,7 +232,7 @@ abstract contract JunkyUrsasGamesLib is JunkyUrsasEventsLib, IEntropyConsumer {
     
     function refund(uint64 sequenceNumber) external nonReentrant {
         GameConfig memory config = abi.decode(games[sequenceNumber], (GameConfig));
-        require(config.timestamp + 1000 > block.timestamp, "Resolve period is not over yet");
+        require(config.timestamp + 1000 < block.timestamp, "Resolve period is not over yet");
         delete games[sequenceNumber];
         if (config.token == address(0)) {
             payable(config.player).transfer(config.wager * config.count);

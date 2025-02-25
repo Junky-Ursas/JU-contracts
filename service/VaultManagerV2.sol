@@ -331,7 +331,7 @@ contract VaultManagerV2 is JunkyUrsasEventsLib {
         }
     
         if (bankrollBalance == 0) {
-            return 0; // Avoid division by zero
+            return 1; // Avoid division by zero (for real)
         }
         require(bankrollBalance > 0, "Bankroll balance is zero");
         return (bankrollBalance * PRECISION) / totalVaultTokens;
